@@ -69,7 +69,11 @@ impl<'de, 'a, 'b> de::Deserializer<'de> for &'b mut Deserializer<'a> {
         deserialize_bytes,
         deserialize_unit,
         deserialize_identifier,
-        deserialize_ignored_any,
+    }
+
+    fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        drop(self);
+        visitor.visit_unit()
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
@@ -399,6 +403,35 @@ mod tests {
         assert_eq!(None, buu.stomach_contents);
 
         connection.execute("DROP TABLE NullBuu", &[]).unwrap();
+    }
+
+    #[test]
+    fn mispelled_field_name() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Buu {
+            wants_candie: bool,
+        }
+
+        let connection = setup_and_connect_to_db();
+
+        connection.execute("CREATE TABLE IF NOT EXISTS SpellBuu (
+                    wants_candy BOOL NOT NULL
+        )", &[]).unwrap();
+
+        connection.execute("INSERT INTO SpellBuu (
+            wants_candy
+        ) VALUES ($1)",
+        &[&true]).unwrap();
+
+        let results = connection.query("SELECT wants_candy FROM SpellBuu", &[]).unwrap();
+
+        let row = results.get(0);
+
+        assert_eq!(
+            super::from_row::<Buu>(row),
+            Err(super::Error::Message(String::from("missing field `wants_candie`"))));
+
+        connection.execute("DROP TABLE SpellBuu", &[]).unwrap();
     }
 
     /*
