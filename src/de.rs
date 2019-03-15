@@ -467,7 +467,6 @@ mod tests {
         connection.execute("DROP TABLE MiBuu", &[]).unwrap();
     }
 
-
     /*
     use postgres_derive::FromSql;
     #[test]
