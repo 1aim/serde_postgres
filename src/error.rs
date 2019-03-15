@@ -15,7 +15,7 @@ pub enum Error {
     /// Row contained a field unknown to the data structure.
     UnknownField,
     /// Row's column type was different from the Rust data structure.
-    InvalidType,
+    InvalidType(String),
     /// Rust data structure contained a type unsupported by `serde_postgres`.
     UnsupportedType,
 }
@@ -43,7 +43,7 @@ impl error::Error for Error {
         match self {
             Error::Message(ref msg) => msg,
             Error::UnknownField => "Unknown field",
-            Error::InvalidType => "Invalid type",
+            Error::InvalidType(_) => "Invalid type",
             Error::UnsupportedType => "Type unsupported",
         }
     }

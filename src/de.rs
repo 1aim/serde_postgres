@@ -52,7 +52,7 @@ macro_rules! get_value {
     ($this:ident, $v:ident, $fn_call:ident, $ty:ty) => {{
         $v.$fn_call($this.input.get_opt::<_, $ty>($this.index)
             .unwrap()
-            .map_err(|_| Error::InvalidType)?)
+            .map_err(|e| Error::InvalidType(format!("{:?}", e)))?)
     }}
 }
 
@@ -129,7 +129,7 @@ impl<'de, 'a, 'b> de::Deserializer<'de> for &'b mut Deserializer<'a> {
     fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let raw = self.input.get_opt::<_, Vec<u8>>(self.index)
             .unwrap()
-            .map_err(|_| Error::InvalidType)?;
+            .map_err(|e| Error::InvalidType(format!("{:?}", e)))?;
 
         visitor.visit_seq(SeqDeserializer::new(raw.into_iter()))
     }
@@ -204,7 +204,12 @@ impl<'de, 'a> de::MapAccess<'de> for Deserializer<'a> {
     {
         let result = seed.deserialize(&mut *self);
         self.index += 1;
-        result
+        if let Err(Error::InvalidType(err)) = result {
+            let name = self.input.columns().get(self.index - 1).unwrap().name();
+            Err(Error::InvalidType(format!("{} {}", name, err)))
+        } else {
+            result
+        }
     }
 }
 
@@ -432,6 +437,36 @@ mod tests {
 
         connection.execute("DROP TABLE SpellBuu", &[]).unwrap();
     }
+
+    #[test]
+    fn missing_optional() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Buu {
+            wants_candy: bool,
+        }
+
+        let connection = setup_and_connect_to_db();
+
+        connection.execute("CREATE TABLE IF NOT EXISTS MiBuu (
+                    wants_candy BOOL
+        )", &[]).unwrap();
+
+        connection.execute("INSERT INTO MiBuu (
+            wants_candy
+        ) VALUES ($1)",
+        &[&None::<bool>]).unwrap();
+
+        let results = connection.query("SELECT wants_candy FROM MiBuu", &[]).unwrap();
+
+        let row = results.get(0);
+
+        assert_eq!(
+            super::from_row::<Buu>(row),
+            Err(super::Error::InvalidType(String::from("wants_candy Error(Conversion(WasNull))"))));
+
+        connection.execute("DROP TABLE MiBuu", &[]).unwrap();
+    }
+
 
     /*
     use postgres_derive::FromSql;
