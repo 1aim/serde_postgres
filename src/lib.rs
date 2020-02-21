@@ -4,14 +4,8 @@
 //! arbitrary structs. (Only deserialization is supported).
 //!
 //! ```rust,no_run
-//! extern crate serde;
-//! extern crate serde_derive;
-//! extern crate serde_postgres;
-//! extern crate postgres;
-//!
 //! use std::error::Error;
-//!
-//! use serde_derive::Deserialize;
+//! use serde::Deserialize;
 //! use postgres::{Connection, TlsMode};
 //!
 //! #[derive(Clone, Debug, Deserialize)]
@@ -20,7 +14,7 @@
 //!     age: i32,
 //! }
 //!
-//! fn main() -> Result<(), Box<Error>> {
+//! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = Connection::connect("postgres://postgres@localhost:5432", TlsMode::None)?;
 //!
 //!     connection.execute("CREATE TABLE IF NOT EXISTS Person (

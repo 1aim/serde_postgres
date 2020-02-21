@@ -258,20 +258,17 @@ impl<'de, 'a, 'b> de::VariantAccess<'de> for &'b mut Deserializer<'a> {
 */
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
+    use serde::Deserialize;
     use std::env;
+    use tokio_postgres::{connect, Client, NoTls};
 
-    use serde_derive::Deserialize;
-
-    use postgres::Connection;
-
-    fn setup_and_connect_to_db() -> Connection {
-        let user = env::var("PGUSER").unwrap_or("postgres".into());
-        let pass = env::var("PGPASSWORD")
-            .map(|p| format!("{}", p))
-            .unwrap_or("postgres".into());
-        let addr = env::var("PGADDR").unwrap_or("localhost".into());
-        let port = env::var("PGPORT").unwrap_or("5432".into());
+    async fn setup_and_connect_to_db() -> Client {
+        let user = env::var("PGUSER").unwrap_or_else(|_| "postgres".into());
+        let pass = env::var("PGPASSWORD").unwrap_or_else(|_| "postgres".into());
+        let addr = env::var("PGADDR").unwrap_or_else(|_| "localhost".into());
+        let port = env::var("PGPORT").unwrap_or_else(|_| "5432".into());
         let url = format!(
             "postgres://{user}:{pass}@{addr}:{port}",
             user = user,
@@ -279,11 +276,15 @@ mod tests {
             addr = addr,
             port = port
         );
-        Connection::connect(url, postgres::TlsMode::None).unwrap()
+        let (client, conn) = connect(&url, NoTls).await.unwrap();
+        tokio::spawn(async move {
+            conn.await.unwrap();
+        });
+        client
     }
 
-    #[test]
-    fn non_null() {
+    #[tokio::test]
+    async fn non_null() {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Buu {
             wants_candy: bool,
@@ -296,7 +297,7 @@ mod tests {
             stomach_contents: Vec<u8>,
         }
 
-        let connection = setup_and_connect_to_db();
+        let connection = setup_and_connect_to_db().await;
 
         connection
             .execute(
@@ -309,38 +310,40 @@ mod tests {
                     weight DOUBLE PRECISION NOT NULL,
                     catchphrase VARCHAR NOT NULL,
                     stomach_contents BYTEA NOT NULL
-        )",
+                )",
                 &[],
             )
+            .await
             .unwrap();
 
         connection
             .execute(
                 "INSERT INTO Buu (
-            wants_candy,
-            width,
-            amount_eaten,
-            amount_want_to_eat,
-            speed,
-            weight,
-            catchphrase,
-            stomach_contents
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    wants_candy,
+                    width,
+                    amount_eaten,
+                    amount_want_to_eat,
+                    speed,
+                    weight,
+                    catchphrase,
+                    stomach_contents
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 &[
                     &true,
                     &20i16,
                     &1000i32,
-                    &1000_000i64,
+                    &1_000_000i64,
                     &99.99f32,
                     &9999.9999f64,
                     &String::from("Woo Woo"),
                     &vec![1u8, 2, 3, 4, 5, 6],
                 ],
             )
+            .await
             .unwrap();
 
-        let results = connection
-            .query(
+        let row = connection
+            .query_one(
                 "SELECT wants_candy,
             width,
             amount_eaten,
@@ -352,26 +355,25 @@ mod tests {
  FROM Buu",
                 &[],
             )
+            .await
             .unwrap();
 
-        let row = results.get(0);
-
-        let buu: Buu = super::from_row(row).unwrap();
+        let buu: Buu = super::from_row(&row).unwrap();
 
         assert_eq!(true, buu.wants_candy);
         assert_eq!(20, buu.width);
         assert_eq!(1000, buu.amount_eaten);
-        assert_eq!(1000_000, buu.amount_want_to_eat);
+        assert_eq!(1_000_000, buu.amount_want_to_eat);
         assert_eq!(99.99, buu.speed);
         assert_eq!(9999.9999, buu.weight);
         assert_eq!("Woo Woo", buu.catchphrase);
         assert_eq!(vec![1, 2, 3, 4, 5, 6], buu.stomach_contents);
 
-        connection.execute("DROP TABLE Buu", &[]).unwrap();
+        connection.execute("DROP TABLE Buu", &[]).await.unwrap();
     }
 
-    #[test]
-    fn nullable() {
+    #[tokio::test]
+    async fn nullable() {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Buu {
             wants_candy: Option<bool>,
@@ -384,10 +386,10 @@ mod tests {
             stomach_contents: Option<Vec<u8>>,
         }
 
-        let connection = setup_and_connect_to_db();
+        let connection = setup_and_connect_to_db().await;
 
         connection
-            .execute(
+            .batch_execute(
                 "CREATE TABLE IF NOT EXISTS NullBuu (
                     wants_candy BOOL,
                     width SMALLINT,
@@ -397,37 +399,31 @@ mod tests {
                     weight DOUBLE PRECISION,
                     catchphrase VARCHAR,
                     stomach_contents BYTEA
-        )",
-                &[],
+                );
+                INSERT INTO NullBuu (
+                    wants_candy,
+                    width,
+                    amount_eaten,
+                    amount_want_to_eat,
+                    speed,
+                    weight,
+                    catchphrase,
+                    stomach_contents
+                ) VALUES (
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL);",
             )
+            .await
             .unwrap();
 
-        connection
-            .execute(
-                "INSERT INTO NullBuu (
-            wants_candy,
-            width,
-            amount_eaten,
-            amount_want_to_eat,
-            speed,
-            weight,
-            catchphrase,
-            stomach_contents
-        ) VALUES (
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL)",
-                &[],
-            )
-            .unwrap();
-
-        let results = connection
-            .query(
+        let row = connection
+            .query_one(
                 "SELECT wants_candy,
             width,
             amount_eaten,
@@ -439,11 +435,10 @@ mod tests {
  FROM NullBuu",
                 &[],
             )
+            .await
             .unwrap();
 
-        let row = results.get(0);
-
-        let buu: Buu = super::from_row(row).unwrap();
+        let buu: Buu = super::from_row(&row).unwrap();
 
         assert_eq!(None, buu.wants_candy);
         assert_eq!(None, buu.width);
@@ -454,140 +449,83 @@ mod tests {
         assert_eq!(None, buu.catchphrase);
         assert_eq!(None, buu.stomach_contents);
 
-        connection.execute("DROP TABLE NullBuu", &[]).unwrap();
+        connection.execute("DROP TABLE NullBuu", &[]).await.unwrap();
     }
 
-    #[test]
-    fn mispelled_field_name() {
+    #[tokio::test]
+    async fn misspelled_field_name() {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Buu {
             wants_candie: bool,
         }
 
-        let connection = setup_and_connect_to_db();
+        let connection = setup_and_connect_to_db().await;
 
         connection
-            .execute(
+            .batch_execute(
                 "CREATE TABLE IF NOT EXISTS SpellBuu (
                     wants_candy BOOL NOT NULL
-        )",
-                &[],
+                );
+                INSERT INTO SpellBuu (
+                    wants_candy
+                ) VALUES (TRUE)",
             )
+            .await
             .unwrap();
 
-        connection
-            .execute(
-                "INSERT INTO SpellBuu (
-            wants_candy
-        ) VALUES ($1)",
-                &[&true],
-            )
+        let row = connection
+            .query_one("SELECT wants_candy FROM SpellBuu", &[])
+            .await
             .unwrap();
-
-        let results = connection
-            .query("SELECT wants_candy FROM SpellBuu", &[])
-            .unwrap();
-
-        let row = results.get(0);
 
         assert_eq!(
-            super::from_row::<Buu>(row),
+            super::from_row::<Buu>(&row),
             Err(super::Error::Message(String::from(
                 "missing field `wants_candie`"
             )))
         );
 
-        connection.execute("DROP TABLE SpellBuu", &[]).unwrap();
+        connection
+            .execute("DROP TABLE SpellBuu", &[])
+            .await
+            .unwrap();
     }
 
-    #[test]
-    fn missing_optional() {
+    #[tokio::test]
+    async fn missing_optional() {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Buu {
             wants_candy: bool,
         }
 
-        let connection = setup_and_connect_to_db();
+        let connection = setup_and_connect_to_db().await;
 
         connection
-            .execute(
+            .batch_execute(
                 "CREATE TABLE IF NOT EXISTS MiBuu (
                     wants_candy BOOL
-        )",
-                &[],
+                );
+                DELETE FROM MiBuu;
+                INSERT INTO MiBuu (
+                    wants_candy
+                ) VALUES (NULL);
+                ",
             )
+            .await
             .unwrap();
 
-        connection
-            .execute(
-                "INSERT INTO MiBuu (
-            wants_candy
-        ) VALUES ($1)",
-                &[&None::<bool>],
-            )
+        let row = connection
+            .query_one("SELECT wants_candy FROM MiBuu", &[])
+            .await
             .unwrap();
-
-        let results = connection
-            .query("SELECT wants_candy FROM MiBuu", &[])
-            .unwrap();
-
-        let row = results.get(0);
 
         assert_eq!(
-            super::from_row::<Buu>(row),
+            super::from_row::<Buu>(&row),
             Err(super::Error::InvalidType(String::from(
-                "wants_candy Error(Conversion(WasNull))"
+                "wants_candy Error { kind: FromSql(0), cause: Some(WasNull) }"
             )))
         );
 
-        connection.execute("DROP TABLE MiBuu", &[]).unwrap();
+        connection.execute("DROP TABLE MiBuu", &[]).await.unwrap();
     }
-
-    /*
-    use postgres_derive::FromSql;
-    #[test]
-    fn enums() {
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Goku {
-            hair: HairColour,
-        }
-
-        #[derive(Debug, Deserialize, FromSql, PartialEq)]
-        #[postgres(name = "hair_colour")]
-        enum HairColour {
-            #[postgres(name = "black")]
-            Black,
-            #[postgres(name = "yellow")]
-            Yellow,
-            #[postgres(name = "blue")]
-            Blue,
-        }
-
-        let connection = setup_and_connect_to_db();
-
-        connection.execute("CREATE TYPE hair_colour as ENUM (
-            'black',
-            'yellow',
-            'blue'
-        )", &[]).unwrap();
-
-        connection.execute("CREATE TABLE Gokus (hair hair_colour)",
-        &[]).unwrap();
-
-        connection.execute("INSERT INTO Gokus VALUES ('black')", &[])
-            .unwrap();
-
-        let results = connection.query("SELECT * FROM Gokus", &[])
-            .unwrap();
-
-        let row = results.get(0);
-
-        let goku: Goku = super::from_row(row).unwrap();
-
-        assert_eq!(HairColour::Black, goku.hair);
-
-        connection.execute("DROP TABLE Gokus", &[]).unwrap();
-        connection.execute("DROP TYPE hair_colour", &[]).unwrap();
-    }
-    */
 }
