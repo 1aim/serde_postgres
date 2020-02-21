@@ -59,6 +59,10 @@ macro_rules! visit_value {
     ($this:ident, $ty:ty, $v:ident . $vfn:ident) => {{
         $v.$vfn(get_value!($this, $ty))
     }};
+
+    ($this:ident, $v:ident . $vfn:ident) => {
+        visit_value!($this, _, $v.$vfn)
+    };
 }
 
 impl<'de, 'a, 'b> de::Deserializer<'de> for &'b mut Deserializer<'a> {
@@ -79,52 +83,52 @@ impl<'de, 'a, 'b> de::Deserializer<'de> for &'b mut Deserializer<'a> {
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, bool, visitor.visit_bool)
+        visit_value!(self, visitor.visit_bool)
     }
 
     fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, i8, visitor.visit_i8)
+        visit_value!(self, visitor.visit_i8)
     }
 
     fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, i16, visitor.visit_i16)
+        visit_value!(self, visitor.visit_i16)
     }
 
     fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, i32, visitor.visit_i32)
+        visit_value!(self, visitor.visit_i32)
     }
 
     fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, i64, visitor.visit_i64)
+        visit_value!(self, visitor.visit_i64)
     }
 
     fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, u32, visitor.visit_u32)
+        visit_value!(self, visitor.visit_u32)
     }
 
     fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, f32, visitor.visit_f32)
+        visit_value!(self, visitor.visit_f32)
     }
 
     fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, f64, visitor.visit_f64)
+        visit_value!(self, visitor.visit_f64)
     }
 
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, &str, visitor.visit_str)
+        visit_value!(self, visitor.visit_str)
     }
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, String, visitor.visit_string)
+        visit_value!(self, visitor.visit_string)
     }
 
     fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         // TODO: use visit_borrowed_bytes
-        visit_value!(self, &[u8], visitor.visit_bytes)
+        visit_value!(self, visitor.visit_bytes)
     }
 
     fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visit_value!(self, Vec<u8>, visitor.visit_byte_buf)
+        visit_value!(self, visitor.visit_byte_buf)
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
