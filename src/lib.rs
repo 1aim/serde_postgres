@@ -6,29 +6,31 @@
 //! ```rust,no_run
 //! use std::error::Error;
 //! use serde::Deserialize;
-//! use postgres::{Connection, TlsMode};
+//! use tokio_postgres::{connect, NoTls};
 //!
 //! #[derive(Clone, Debug, Deserialize)]
 //! struct Person {
 //!     name: String,
 //!     age: i32,
 //! }
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn Error>> {
+//!     let (client, conn) = connect("postgres://postgres@localhost:5432", NoTls).await?;
+//!     tokio::spawn(async move { conn.await.unwrap() });
 //!
-//! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::connect("postgres://postgres@localhost:5432", TlsMode::None)?;
+//!     client.execute(
+//!         "CREATE TABLE IF NOT EXISTS Person (
+//!             name VARCHAR NOT NULL,
+//!             age INT NOT NULL
+//!         )",
+//!         &[]
+//!     ).await?;
 //!
-//!     connection.execute("CREATE TABLE IF NOT EXISTS Person (
-//!     name VARCHAR NOT NULL,
-//!     age INT NOT NULL
-//!     )", &[])?;
+//!     client.execute("INSERT INTO Person (name, age) VALUES ($1, $2)", &[&"Jane", &23]).await?;
 //!
-//!     connection.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
-//!     &[&"Jane", &23])?;
+//!     client.execute("INSERT INTO Person (name, age) VALUES ($1, $2)", &[&"Alice", &32]).await?;
 //!
-//!     connection.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
-//!     &[&"Alice", &32])?;
-//!
-//!     let rows = connection.query("SELECT name, age FROM Person", &[])?;
+//!     let rows = client.query("SELECT name, age FROM Person", &[]).await?;
 //!
 //!     let people: Vec<Person> = serde_postgres::from_rows(&rows)?;
 //!
