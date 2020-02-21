@@ -2,6 +2,7 @@
 use crate::error::{Error, Result};
 use crate::raw::Raw;
 use serde::de::{self, value::SeqDeserializer, Deserialize, IntoDeserializer, Visitor};
+use std::iter::FromIterator;
 use tokio_postgres::Row;
 
 /// A structure that deserialize Postgres rows into Rust values.
@@ -23,17 +24,17 @@ pub fn from_row<'a, T: Deserialize<'a>>(input: &'a Row) -> Result<T> {
     Ok(T::deserialize(&mut deserializer)?)
 }
 
-/// Attempt to deserialize from `Rows`.
-pub fn from_rows<'a, T: Deserialize<'a>>(
+/// Attempt to deserialize multiple `Rows`.
+pub fn from_rows<'a, T: Deserialize<'a>, I: FromIterator<T>>(
     input: impl IntoIterator<Item = &'a Row>,
-) -> Result<Vec<T>> {
+) -> Result<I> {
     input
         .into_iter()
         .map(|row| {
             let mut deserializer = Deserializer::from_row(row);
             T::deserialize(&mut deserializer)
         })
-        .collect::<Result<Vec<T>>>()
+        .collect()
 }
 
 macro_rules! unsupported_type {
