@@ -1,7 +1,6 @@
 //! When serializing or deserializing from Postgres rows goes wrong.
-use std::{fmt, error};
-
 use serde::{de, ser};
+use std::{error, fmt};
 
 /// Alias for a `Result` with the error type `serde_postgres::Error`.
 pub type Result<T> = ::std::result::Result<T, Error>;
@@ -10,7 +9,7 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 /// postgres rows.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
-    /// A custom defined error occured. Typically coming from `serde`.
+    /// A custom defined error occurred. Typically coming from `serde`.
     Message(String),
     /// Row contained a field unknown to the data structure.
     UnknownField,

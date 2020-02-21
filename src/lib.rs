@@ -47,14 +47,9 @@
 //! ```
 #![deny(missing_docs)]
 
-extern crate serde;
-extern crate postgres;
-// extern crate postgres_derive;
-
-#[cfg(test)] extern crate serde_derive;
-
 pub mod de;
 pub mod error;
+mod raw;
 
 pub use de::{from_row, from_rows, Deserializer};
 pub use error::{Error, Result};

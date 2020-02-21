@@ -14,7 +14,7 @@ repository = "1aim/serde_postgres"
 
 [dependencies]
 serde = "1.0.104"
-tokio-postgres = "0.5.2"
+tokio-postgres = { version = "0.5.2", default_features = false }
 
 [dev-dependencies]
 serde = { version = "1.0.104", features = [ "derive" ] }
