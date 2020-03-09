@@ -4,19 +4,13 @@
 [![Lines Of Code](https://tokei.rs/b1/github/1aim/serde_postgres?category=code)](https://github.com/Aaronepower/tokei)
 [![Documentation](https://docs.rs/serde_postgres/badge.svg)](https://docs.rs/serde_postgres/)
 
-Easily deserialize rows from [`postgres`](//docs.rs/postgres) into
+Easily deserialize rows from [`tokio-postgres`](//docs.rs/tokio-postgres) into
 arbitrary structs. (Only deserialization is supported).
 
 ```rust
-extern crate serde;
-extern crate serde_derive;
-extern crate serde_postgres;
-extern crate postgres;
-
 use std::error::Error;
-
-use serde_derive::Deserialize;
-use postgres::{Connection, TlsMode};
+use serde::Deserialize;
+use tokio_postgres::{connect, NoTls};
 
 #[derive(Clone, Debug, Deserialize)]
 struct Person {
@@ -24,21 +18,23 @@ struct Person {
     age: i32,
 }
 
-fn main() -> Result<(), Box<Error>> {
-    let connection = Connection::connect("postgres://postgres@localhost:5432", TlsMode::None)?;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let (client, connection) = connect("postgres://postgres@localhost:5432", NoTls).await?;
+    tokio::spawn(connection);
 
-    connection.execute("CREATE TABLE IF NOT EXISTS Person (
+    client.execute("CREATE TABLE IF NOT EXISTS Person (
         name VARCHAR NOT NULL,
         age INT NOT NULL
-    )", &[])?;
+    )", &[]).await?;
 
-    connection.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
-    &[&"Jane", &23])?;
+    client.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
+                       &[&"Jane", &23i32]).await?;
 
-    connection.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
-    &[&"Alice", &32])?;
-    
-    let rows = connection.query("SELECT name, age FROM Person", &[])?;
+    client.execute("INSERT INTO Person (name, age) VALUES ($1, $2)",
+                       &[&"Alice", &32i32]).await?;
+
+    let rows = client.query("SELECT name, age FROM Person", &[]).await?;
 
     let people: Vec<Person> = serde_postgres::from_rows(&rows)?;
 
