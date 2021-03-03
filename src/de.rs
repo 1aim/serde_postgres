@@ -524,7 +524,7 @@ mod tests {
         client.execute("INSERT INTO TestPerson (name, age) VALUES ($1, $2)",
                        &[&"Alice", &32i32])?;
 
-        let rows = client.query("SELECT name, age FROM Person", &[])?;
+        let rows = client.query("SELECT name, age FROM TestPerson", &[])?;
 
         let mut people: Vec<Person> = crate::from_rows(&rows).unwrap();
         people.sort();
